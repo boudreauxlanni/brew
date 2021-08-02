@@ -202,7 +202,7 @@ module Homebrew
     # Remove bottle blocks, they won't work.
     result.sub!(/  bottle do.+?end\n\n/m, "") if destination_tap != source_tap
 
-    path = destination_tap.path/"Formula/#{name}@#{version}.rb"
+    path = destination_tap.path/"Formula/#{name}@#{version.to_s.downcase}.rb"
     if path.exist?
       unless args.force?
         odie <<~EOS
@@ -215,6 +215,7 @@ module Homebrew
       path.delete
     end
     ohai "Writing formula for #{name} from revision #{rev} to:", path
+    path.dirname.mkpath
     path.write result
   end
 
@@ -225,6 +226,6 @@ module Homebrew
     contents = Utils::Git.last_revision_of_file(repo, file, before_commit: rev)
     contents.gsub!("@url=", "url ")
     contents.gsub!("require 'brewkit'", "require 'formula'")
-    with_monkey_patch { Formulary.from_contents(name, file, contents) }
+    with_monkey_patch { Formulary.from_contents(name, file, contents, ignore_errors: true) }
   end
 end

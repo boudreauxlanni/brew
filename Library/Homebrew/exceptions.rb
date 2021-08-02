@@ -92,8 +92,35 @@ class FormulaOrCaskUnavailableError < RuntimeError
   end
 
   sig { returns(String) }
+  def did_you_mean
+    similar_formula_names = Formula.fuzzy_search(name)
+    return "" if similar_formula_names.blank?
+
+    "Did you mean #{similar_formula_names.to_sentence two_words_connector: " or ", last_word_connector: " or "}?"
+  end
+
+  sig { returns(String) }
   def to_s
-    "No available formula or cask with the name \"#{name}\"."
+    "No available formula or cask with the name \"#{name}\". #{did_you_mean}".strip
+  end
+end
+
+# Raised when a formula or cask in a specific tap is not available.
+class TapFormulaOrCaskUnavailableError < FormulaOrCaskUnavailableError
+  extend T::Sig
+
+  attr_reader :tap
+
+  def initialize(tap, name)
+    super "#{tap}/#{name}"
+    @tap = tap
+  end
+
+  sig { returns(String) }
+  def to_s
+    s = super
+    s += "\nPlease tap it and then try again: brew tap #{tap}" unless tap.installed?
+    s
   end
 end
 
@@ -110,7 +137,7 @@ class FormulaUnavailableError < FormulaOrCaskUnavailableError
 
   sig { returns(String) }
   def to_s
-    "No available formula with the name \"#{name}\"#{dependent_s}."
+    "No available formula with the name \"#{name}\"#{dependent_s}. #{did_you_mean}".strip
   end
 end
 
@@ -199,6 +226,13 @@ class TapFormulaUnavailableError < FormulaUnavailableError
     s = super
     s += "\nPlease tap it and then try again: brew tap #{tap}" unless tap.installed?
     s
+  end
+end
+
+# Raised when a formula in a the core tap is unavailable.
+class CoreTapFormulaUnavailableError < TapFormulaUnavailableError
+  def initialize(name)
+    super CoreTap.instance, name
   end
 end
 
@@ -708,5 +742,12 @@ class MacOSVersionError < RuntimeError
   def initialize(version)
     @version = version
     super "unknown or unsupported macOS version: #{version.inspect}"
+  end
+end
+
+# Raised when `detected_perl_shebang` etc cannot detect the shebang.
+class ShebangDetectionError < RuntimeError
+  def initialize(type, reason)
+    super "Cannot detect #{type} shebang: #{reason}."
   end
 end

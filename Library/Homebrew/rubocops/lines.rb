@@ -205,7 +205,7 @@ module RuboCop
 
           find_method_with_args(body_node, :depends_on, "mpich") do
             problem "Formulae in homebrew/core should use 'depends_on \"open-mpi\"' " \
-            "instead of '#{@offensive_node.source}'." do |corrector|
+                    "instead of '#{@offensive_node.source}'." do |corrector|
               corrector.replace(@offensive_node.source_range, "depends_on \"open-mpi\"")
             end
           end
@@ -340,7 +340,7 @@ module RuboCop
 
             offending_node(str)
             problem "References to `#{content}` should "\
-            "match the specified python dependency (`#{fix}`)" do |corrector|
+                    "match the specified python dependency (`#{fix}`)" do |corrector|
               corrector.replace(str.source_range, "\"#{fix}\"")
             end
           end
@@ -540,6 +540,13 @@ module RuboCop
             problem "macOS has been 64-bit only since 10.6 so ENV.universal_binary is deprecated."
           end
 
+          find_instance_method_call(body_node, "ENV", :runtime_cpu_detection) do
+            next if tap_style_exception? :runtime_cpu_detection_allowlist
+
+            problem "Formulae should be verified as having support for runtime hardware detection before " \
+                    "using ENV.runtime_cpu_detection."
+          end
+
           find_every_method_call_by_name(body_node, :depends_on).each do |method|
             next unless method_called?(method, :new)
 
@@ -646,58 +653,6 @@ module RuboCop
           problem "Formulae should depend on specific X libraries instead of :x11" if depends_on? :x11
           problem "Formulae should not depend on :osxfuse" if depends_on? :osxfuse
           problem "Formulae should not depend on :tuntap" if depends_on? :tuntap
-        end
-      end
-
-      # This cop makes sure that shell command arguments are separated.
-      #
-      # @api private
-      class ShellCommands < FormulaCop
-        extend AutoCorrector
-
-        def audit_formula(_node, _class_node, _parent_class_node, body_node)
-          # Match shell commands separated by spaces in the same string
-          shell_cmd_with_spaces_regex = /[^"' ]*(?:\s[^"' ]*)+/
-
-          popen_commands = [
-            :popen_read,
-            :safe_popen_read,
-            :popen_write,
-            :safe_popen_write,
-          ]
-
-          shell_metacharacters = %w[> < < | ; : & * $ ? : ~ + @ !` ( ) [ ]]
-
-          find_every_method_call_by_name(body_node, :system).each do |method|
-            # Only separate when no shell metacharacters are present
-            next if shell_metacharacters.any? { |meta| string_content(parameters(method).first).include?(meta) }
-
-            next unless (match = regex_match_group(parameters(method).first, shell_cmd_with_spaces_regex))
-
-            good_args = match[0].gsub(" ", "\", \"")
-            offending_node(parameters(method).first)
-            problem "Separate `system` commands into `\"#{good_args}\"`" do |corrector|
-              corrector.replace(@offensive_node.source_range, @offensive_node.source.gsub(" ", "\", \""))
-            end
-          end
-
-          popen_commands.each do |command|
-            find_instance_method_call(body_node, "Utils", command) do |method|
-              index = parameters(method).first.hash_type? ? 1 : 0
-
-              # Only separate when no shell metacharacters are present
-              next if shell_metacharacters.any? { |meta| string_content(parameters(method)[index]).include?(meta) }
-
-              next unless (match = regex_match_group(parameters(method)[index], shell_cmd_with_spaces_regex))
-
-              good_args = match[0].gsub(" ", "\", \"")
-              offending_node(parameters(method)[index])
-              problem "Separate `Utils.#{command}` commands into `\"#{good_args}\"`" do |corrector|
-                good_args = @offensive_node.source.gsub(" ", "\", \"")
-                corrector.replace(@offensive_node.source_range, good_args)
-              end
-            end
-          end
         end
       end
     end

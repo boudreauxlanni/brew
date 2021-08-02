@@ -3,24 +3,20 @@
 
 if ENV["HOMEBREW_TESTS_COVERAGE"]
   require "simplecov"
+  require "simplecov-cobertura"
 
-  formatters = [SimpleCov::Formatter::HTMLFormatter]
-  if ENV["HOMEBREW_CODECOV_TOKEN"] && RUBY_PLATFORM[/darwin/]
-    require "codecov"
-
-    formatters << SimpleCov::Formatter::Codecov
-
-    if ENV["TEST_ENV_NUMBER"]
-      SimpleCov.at_exit do
-        result = SimpleCov.result
-        result.format! if ParallelTests.number_of_running_processes <= 1
-      end
-    end
-
-    ENV["CODECOV_TOKEN"] = ENV["HOMEBREW_CODECOV_TOKEN"]
-  end
-
+  formatters = [
+    SimpleCov::Formatter::HTMLFormatter,
+    SimpleCov::Formatter::CoberturaFormatter,
+  ]
   SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new(formatters)
+
+  if RUBY_PLATFORM[/darwin/] && ENV["TEST_ENV_NUMBER"]
+    SimpleCov.at_exit do
+      result = SimpleCov.result
+      result.format! if ParallelTests.number_of_running_processes <= 1
+    end
+  end
 end
 
 require_relative "../warnings"
@@ -81,25 +77,35 @@ RSpec.configure do |config|
     c.max_formatted_output_length = 200
   end
 
-  # Use rspec-retry in CI.
+  # Use rspec-retry to handle flaky tests.
+  config.default_sleep_interval = 1
+
+  # Don't make retries as noisy unless in CI.
   if ENV["CI"]
     config.verbose_retry = true
     config.display_try_failure_messages = true
-    config.default_retry_count = 2
-    config.default_sleep_interval = 1
+  end
 
-    config.around(:each, :integration_test) do |example|
-      example.metadata[:timeout] ||= 120
-      example.run
-    end
+  # Don't want the nicer default retry behaviour when using BuildPulse to
+  # identify flaky tests.
+  config.default_retry_count = 2 unless ENV["BUILDPULSE"]
 
-    config.around(:each, :needs_network) do |example|
-      example.metadata[:timeout] ||= 120
-      example.metadata[:retry] ||= 4
-      example.metadata[:retry_wait] ||= 2
-      example.metadata[:exponential_backoff] ||= true
-      example.run
-    end
+  # Increase timeouts for integration tests (as we expect them to take longer).
+  config.around(:each, :integration_test) do |example|
+    example.metadata[:timeout] ||= 120
+    example.run
+  end
+
+  config.around(:each, :needs_network) do |example|
+    example.metadata[:timeout] ||= 120
+
+    # Don't want the nicer default retry behaviour when using BuildPulse to
+    # identify flaky tests.
+    example.metadata[:retry] ||= 4 unless ENV["BUILDPULSE"]
+
+    example.metadata[:retry_wait] ||= 2
+    example.metadata[:exponential_backoff] ||= true
+    example.run
   end
 
   # Never truncate output objects.
@@ -185,6 +191,8 @@ RSpec.configure do |config|
     Formula.clear_cache
     Keg.clear_cache
     Tab.clear_cache
+    Dependency.clear_cache
+    Requirement.clear_cache
     FormulaInstaller.clear_attempted
     FormulaInstaller.clear_installed
 
@@ -229,6 +237,8 @@ RSpec.configure do |config|
       Formula.clear_cache
       Keg.clear_cache
       Tab.clear_cache
+      Dependency.clear_cache
+      Requirement.clear_cache
 
       FileUtils.rm_rf [
         *TEST_DIRECTORIES,

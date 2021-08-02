@@ -83,6 +83,7 @@ RSpec.shared_context "integration test" do # rubocop:disable RSpec/ContextWordin
       "HOMEBREW_INTEGRATION_TEST" => command_id_from_args(args),
       "HOMEBREW_TEST_TMPDIR"      => TEST_TMPDIR,
       "HOMEBREW_DEVELOPER"        => ENV["HOMEBREW_DEVELOPER"],
+      "HOMEBREW_DEV_CMD_RUN"      => "true",
       "GEM_HOME"                  => nil,
     )
 
@@ -124,6 +125,15 @@ RSpec.shared_context "integration test" do # rubocop:disable RSpec/ContextWordin
     end
   end
 
+  def brew_sh(*args)
+    Bundler.with_clean_env do
+      stdout, stderr, status = Open3.capture3("#{ENV["HOMEBREW_PREFIX"]}/bin/brew", *args)
+      $stdout.print stdout
+      $stderr.print stderr
+      status
+    end
+  end
+
   def setup_test_formula(name, content = nil, bottle_block: nil)
     case name
     when /^testball/
@@ -153,7 +163,7 @@ RSpec.shared_context "integration test" do # rubocop:disable RSpec/ContextWordin
 
         # something here
       RUBY
-    when "foo", "patchelf"
+    when "foo", "gnupg", "patchelf"
       content = <<~RUBY
         url "https://brew.sh/#{name}-1.0"
       RUBY
@@ -211,7 +221,7 @@ RSpec.shared_context "integration test" do # rubocop:disable RSpec/ContextWordin
         system "git", "clone", "--shared", system_tap_path, tap.path
         system "git", "-C", tap.path, "checkout", "master"
       else
-        tap.install(full_clone: false, quiet: true)
+        tap.install(quiet: true)
       end
     end
   end
@@ -226,7 +236,7 @@ RSpec.shared_context "integration test" do # rubocop:disable RSpec/ContextWordin
       brew "install", old_name
 
       (tap_path/"Formula/#{old_name}.rb").unlink
-      (tap_path/"formula_renames.json").write JSON.generate(old_name => new_name)
+      (tap_path/"formula_renames.json").write JSON.pretty_generate(old_name => new_name)
 
       system "git", "add", "--all"
       system "git", "commit", "-m",

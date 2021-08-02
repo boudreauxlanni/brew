@@ -6,6 +6,7 @@ require "keg"
 require "cli/parser"
 require "cask/cmd"
 require "cask/caskroom"
+require "bottle_api"
 
 module Homebrew
   extend T::Sig
@@ -64,7 +65,7 @@ module Homebrew
         "formulae" => json_info(formulae, args: args),
         "casks"    => json_info(casks, args: args),
       }
-      puts JSON.generate(json)
+      puts JSON.pretty_generate(json)
 
       outdated = formulae + casks
 
@@ -91,7 +92,9 @@ module Homebrew
         if verbose?
           outdated_kegs = f.outdated_kegs(fetch_head: args.fetch_HEAD?)
 
-          current_version = if f.alias_changed? && !f.latest_formula.latest_version_installed?
+          current_version = if ENV["HOMEBREW_JSON_CORE"].present? && (f.core_formula? || f.tap.blank?)
+            BottleAPI.latest_pkg_version(f.name)&.to_s || f.pkg_version.to_s
+          elsif f.alias_changed? && !f.latest_formula.latest_version_installed?
             latest = f.latest_formula
             "#{latest.name} (#{latest.pkg_version})"
           elsif f.head? && outdated_kegs.any? { |k| k.version.to_s == f.pkg_version.to_s }
@@ -171,7 +174,7 @@ module Homebrew
     if args.named.present?
       select_outdated(args.named.to_casks, args: args)
     else
-      select_outdated(Cask::Caskroom.casks(config: Cask::Config.from_args(args)), args: args)
+      select_outdated(Cask::Caskroom.casks, args: args)
     end
   end
 
@@ -180,7 +183,7 @@ module Homebrew
 
     if formulae.blank? && casks.blank?
       formulae = Formula.installed
-      casks = Cask::Caskroom.casks(config: Cask::Config.from_args(args))
+      casks = Cask::Caskroom.casks
     end
 
     [select_outdated(formulae, args: args).sort, select_outdated(casks, args: args)]

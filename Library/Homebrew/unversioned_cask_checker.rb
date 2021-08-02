@@ -60,6 +60,56 @@ module Homebrew
       end
     end
 
+    sig { returns(T::Hash[String, BundleVersion]) }
+    def all_versions
+      versions = {}
+
+      parse_info_plist = proc do |info_plist_path|
+        plist = system_command!("plutil", args: ["-convert", "xml1", "-o", "-", info_plist_path]).plist
+
+        id = plist["CFBundleIdentifier"]
+        version = BundleVersion.from_info_plist_content(plist)
+
+        versions[id] = version if id && version
+      end
+
+      Dir.mktmpdir do |dir|
+        dir = Pathname(dir)
+
+        installer.extract_primary_container(to: dir)
+
+        info_plist_paths = apps.flat_map do |app|
+          top_level_info_plists(Pathname.glob(dir/"**"/app.source.basename/"Contents"/"Info.plist")).sort
+        end
+
+        info_plist_paths.each(&parse_info_plist)
+
+        pkg_paths = pkgs.flat_map do |pkg|
+          Pathname.glob(dir/"**"/pkg.path.basename).sort
+        end
+
+        pkg_paths.each do |pkg_path|
+          Dir.mktmpdir do |extract_dir|
+            extract_dir = Pathname(extract_dir)
+            FileUtils.rmdir extract_dir
+
+            system_command! "pkgutil", args: ["--expand-full", pkg_path, extract_dir]
+
+            top_level_info_plist_paths = top_level_info_plists(Pathname.glob(extract_dir/"**/Contents/Info.plist"))
+
+            top_level_info_plist_paths.each(&parse_info_plist)
+          ensure
+            Cask::Utils.gain_permissions_remove(extract_dir)
+            extract_dir.mkpath
+          end
+        end
+
+        nil
+      end
+
+      versions
+    end
+
     sig { returns(T.nilable(String)) }
     def guess_cask_version
       if apps.empty? && pkgs.empty?
@@ -126,13 +176,13 @@ module Homebrew
 
             distribution_path = extract_dir/"Distribution"
             if distribution_path.exist?
-              Homebrew.install_bundler_gems!
-              require "nokogiri"
+              require "rexml/document"
 
-              xml = Nokogiri::XML(distribution_path.read)
+              xml = REXML::Document.new(distribution_path.read)
 
-              product_version = xml.xpath("//installer-gui-script//product").first&.attr("version")
-              return product_version if product_version
+              product = xml.get_elements("//installer-gui-script//product").first
+              product_version = product["version"] if product
+              return product_version if product_version.present?
             end
 
             opoo "#{pkg_path.basename} contains multiple packages: #{packages}" if packages.count != 1

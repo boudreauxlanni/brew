@@ -33,12 +33,6 @@ module Homebrew
         description:  "Use this as the `bat` configuration file.",
         default_text: "`$HOME/.bat/config`.",
       },
-      HOMEBREW_BINTRAY_KEY:                   {
-        description: "Use this API key when accessing the Bintray API (where bottles are stored).",
-      },
-      HOMEBREW_BINTRAY_USER:                  {
-        description: "Use this username when accessing the Bintray API (where bottles are stored).",
-      },
       HOMEBREW_BOOTSNAP:                      {
         description: "If set, use Bootsnap to speed up repeated `brew` calls. "\
                      "A no-op when using Homebrew's vendored, relocatable Ruby on macOS (as it doesn't work).",
@@ -52,8 +46,8 @@ module Homebrew
                       "download from the prefix `http://localhost:8080/`. " \
                       "If bottles are not available at `HOMEBREW_BOTTLE_DOMAIN` " \
                       "they will be downloaded from the default bottle domain.",
-        default_text: "macOS: `https://homebrew.bintray.com/`, " \
-                      "Linux: `https://linuxbrew.bintray.com/`.",
+        default_text: "macOS: `https://ghcr.io/v2/homebrew/core`, " \
+                      "Linux: `https://ghcr.io/v2/linuxbrew/core`.",
         default:      HOMEBREW_BOTTLE_DEFAULT_DOMAIN,
       },
       HOMEBREW_BREW_GIT_REMOTE:               {
@@ -172,6 +166,16 @@ module Homebrew
                      "\n\n    *Note:* Homebrew doesn't require permissions for any of the scopes, but some " \
                      "developer commands may require additional permissions.",
       },
+      HOMEBREW_GITHUB_PACKAGES_TOKEN:         {
+        description: "Use this GitHub personal access token when accessing the GitHub Packages Registry "\
+                     "(where bottles may be stored).",
+      },
+      HOMEBREW_DOCKER_REGISTRY_TOKEN:         {
+        description: "Use this bearer token for authenticating with a Docker registry proxying GitHub Packages.",
+      },
+      HOMEBREW_GITHUB_PACKAGES_USER:          {
+        description: "Use this username when accessing the GitHub Packages Registry (where bottles may be stored).",
+      },
       HOMEBREW_GIT_EMAIL:                     {
         description: "Set the Git author and committer email to this value.",
       },
@@ -256,8 +260,17 @@ module Homebrew
                      "`HOMEBREW_CLEANUP_PERIODIC_FULL_DAYS` days.",
         boolean:     true,
       },
+      HOMEBREW_NO_INSTALL_UPGRADE:            {
+        description: "If set, `brew install` will not automatically upgrade installed but outdated formulae",
+        boolean:     true,
+      },
       HOMEBREW_PRY:                           {
         description: "If set, use Pry for the `brew irb` command.",
+        boolean:     true,
+      },
+      HOMEBREW_SIMULATE_MACOS_ON_LINUX:       {
+        description: "If set, running Homebrew on Linux will simulate certain macOS code paths. This is useful " \
+                     "when auditing macOS formulae while on Linux. Implies `HOMEBREW_FORCE_HOMEBREW_ON_LINUX`.",
         boolean:     true,
       },
       HOMEBREW_SKIP_OR_LATER_BOTTLES:         {
